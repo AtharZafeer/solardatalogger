@@ -40,7 +40,7 @@ When the compiling is done, it will generate a firmware.bin file. it will be som
 - Method 1: To use the Over The Air (OTA) - flash button on the desktop IDE. This will inncur heavy data cost. So, This method is not recommeneded
 - Method 2: To use the particle cli to flash the firmware.
 
-#Method 2: 
+##Method 2: 
 -Open commandprompt and cd into the directory in which the firmware.bin file is located. For this, the commandproft command would be something like this 
 	      ```cd "<filepath to the working project directory>" ```
 -Connect the particle board to the computer using a microusb to usb cable
@@ -51,5 +51,7 @@ When the compiling is done, it will generate a firmware.bin file. it will be som
 -In the command prompt, type the following command:
 	```particle flash --usb <firmware.bin file name>```
 -Replace the firmware.bin file name to the filename of the firmware.bin file that was generated during compilation
--After flashing the LED on the E-Series should turn glow in cyan color (sky bluish color)
+-After flashing the LED on the E-Series should turn glow in cyan color (sky bluish color).
+
+
 	
