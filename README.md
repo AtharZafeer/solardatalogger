@@ -51,7 +51,25 @@ When the compiling is done, it will generate a firmware.bin file. it will be som
 -In the command prompt, type the following command:  
 	```particle flash --usb <firmware.bin file name>```   
 -Replace the firmware.bin file name to the filename of the firmware.bin file that was generated during compilation   
--After flashing the LED on the E-Series should turn glow in cyan color (sky bluish color).
+-After flashing the LED on the E-Series should turn glow in cyan color (sky bluish color).  
+
+
+### References  
+https://docs.particle.io/reference/device-os/firmware/electron/ - for particle commands  
+
+https://docs.particle.io/reference/developer-tools/cli/  - for particle cli commands  
+
+https://docs.particle.io/reference/hardware/pin-info/?m=table&sort=num  -Pin table  
+
+https://docs.particle.io/datasheets/cellular/e-series-eval-board/   - datasheet of E-series evaluation board  
+
+https://console.particle.io/  - Console for particle (manage particle devices)  
+
+https://docs.particle.io/tutorials/device-os/led/electron/ - have details about various modes board (dfu,internet etc)  
+
+https://community.particle.io/  - And particle community. you can look up when you are stuck and also you can always post, the community is responsive and awesome!
+
+
 
 
 	
