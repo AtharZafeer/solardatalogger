@@ -2,7 +2,7 @@
 #include "SdFat.h"        //library for memory card
 #include"ParticleFtpClient.h" //library for FTP client
 #include <OneWire.h>          //library for temperature sensor
-#include <DallasTemperature.h>
+#include <spark-dallas-temperature.h>
 
 #define battVolt B2 //battery voltage input analog pin
 #define UCPVolt B3 //uncleaned panel voltage input analog pin
@@ -176,9 +176,7 @@ void loop() {
   curCp = currentFunc(CPcurr);  if(curCp != 0 && curUcp <= 30 ) {flags[4] = 1;} //read the cleaned panel current and set the flag high if not zero
   delay(10);
   tempFunc();             //this function takes the data from all the three temperature sensor using the onewire library
-  tempBat = temperature[2]; if(tempBat!=0) {flags[7]= 1;}  // assign the temperature for printing
-  tempUcp = temperature[1]; if(tempUcp!=0) {flags[5] = 1;}
-  tempCp = temperature[0]; if(tempCp!=0) {flags[6] = 1;}
+
   delay(10);
   irradiation = voltageFunc(irr); if(irradiation!=0) {flags[8]=1;} //read the irradiation sensor voltage and set the flag high if non zero
   irradiation*=3000;
@@ -243,7 +241,7 @@ float voltageFunc( int pin) {
   vout = (3.3/4095)*analogRead(pin); //use pins B2, B3, B4, B5
   vin += (vout / (R2/(R1+R2)) ); //remove the offset
 }
-  vin/=100;
+  vin/=100;   //taking the average of all the readings
   Serial.print("\n Voltage:  ");
   Serial.println(vin);
 
@@ -252,17 +250,17 @@ float voltageFunc( int pin) {
 
 //temperature function
 void tempFunc() {
-  sensors.requestTemperatures();
-  for(int i = 0;i < 3; i++)
-  {
-     if(bat[7] == c[i]) {
-       Serial.println("Battery Temperature:");
-       printAddress(bat);
-       tempBat = sensors.getTempC(bat);
-       Serial.print("Temp C: ");
+  sensors.requestTemperatures();    //request data from the sensors
+  for(int i = 0;i < 3; i++)     //loop through the three different address to
+  {                       //find the right one and assign it accordingly. for example
+     if(bat[7] == c[i]) { //this line checks battery temperature sensor's last address
+       Serial.println("Battery Temperature:"); //if it matches as per the data we gave
+       printAddress(bat);   //this address is then is for battery temperature
+       tempBat = sensors.getTempC(bat); //this address is passed and battery temperature is
+       Serial.print("Temp C: ");    //assigned to the tempBat variable
    Serial.println(tempBat);Serial.println("\n");
    }
-   if(ucp[7]==c[i]) {
+   if(ucp[7]==c[i]) {//the same is repeated three times. (3 sensors )
      Serial.println("UCP Temperature:");
      printAddress(ucp);
      tempUcp = sensors.getTempC(ucp);
@@ -277,7 +275,7 @@ void tempFunc() {
    Serial.println(tempCp);Serial.println("\n");
    }
 }
-
+}
 
 // Sdcard writter
 void writeSDcard(float vBat,float vUcp,float vCp,float curUcp,float curCp,float tempBat,float tempUcp,float tempCp, float irradiation){
@@ -464,15 +462,15 @@ void printAddress(DeviceAddress deviceAddress)
 }
 // checking functions
 
-int voltageCheck(int pin) {
- if(voltageFunc(pin)) {
+int voltageCheck(int pin) { //this functions will return 1 if the voltage sensor
+ if(voltageFunc(pin)) { //has any value. else it will return 0
    return 1;
  }else {
    return 0;
  }
 }
 //voltage check
-int currentCheck(int pin) {
+int currentCheck(int pin) { //this function will return 1 if there is current, else it will return 0
   float err = (3.3/4095)*analogRead(pin);
     if( err ) {
       return 0;
@@ -484,8 +482,8 @@ int currentCheck(int pin) {
 
 void tempcheck() {
 
-    if(sensors.getDeviceCount() == 3){
-      flags[6] = 1;
+    if(sensors.getDeviceCount() == 3){ //gets the device count and checks if it is
+      flags[6] = 1;       //equal to 3, else makes the flag go to zero
       flags[5] = 1;
       flags[4] = 1;
 
@@ -494,16 +492,19 @@ void tempcheck() {
       flags[5] = 0;
       flags[4] = 0;
     }
+
+    //below we assign the address. it's out of if block because, if the count is not equal
+    //to 3 it wont assign the address of even the working sensor.
     if (!sensors.getAddress(bat, 0)) Serial.println("Unable to find address for Device 0");
     if (!sensors.getAddress(ucp, 1)) Serial.println("Unable to find address for Device 1");
     if (!sensors.getAddress(cp, 2)) Serial.println("Unable to find address for Device 2");
-    sensors.setResolution(bat,TEMPERATURE_PRECISION);
-    sensors.setResolution(ucp,TEMPERATURE_PRECISION);
-    sensors.setResolution(cp,TEMPERATURE_PRECISION);
+    sensors.setResolution(bat,9); //we set the precision
+    sensors.setResolution(ucp,9);// 9bit or 11 bit or 12 bit
+    sensors.setResolution(cp,9);
 }
 //temp check
 
-int sdcheck() {
+int sdcheck() { //this will check whether the SD card is there are not.
   if (!sd.begin(chipSelect, SPI_FULL_SPEED)) {
     Serial.println("failed to open card");
     return 0;
