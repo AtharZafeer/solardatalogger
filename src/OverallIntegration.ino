@@ -1,8 +1,8 @@
-#include "DS18.h"         //library for temperature sensor
 #include "Particle.h"     //library to run arduino code for particle board
 #include "SdFat.h"        //library for memory card
 #include"ParticleFtpClient.h" //library for FTP client
-
+#include <OneWire.h>          //library for temperature sensor
+#include <DallasTemperature.h>
 
 #define battVolt B2 //battery voltage input analog pin
 #define UCPVolt B3 //uncleaned panel voltage input analog pin
@@ -20,8 +20,13 @@ const uint8_t chipSelect = A2; //chipSelect for SD, this can be anything, i used
 
 File myFile;  //This is the file object for SD card.
 //The above three var declaration is for sd card function
-DS18 sensor(Temp);    //this is object function of temperature sensor
-float temperature[5]; //variable to store temperature
+OneWire oneWire(Temp);   //this is object function of temperature sensor
+DallasTemperature sensors(&oneWire); //this is the object that uses the previous object
+DeviceAddress bat,ucp,cp; //variable to store address of the temperature sensor
+const int c[] = {0x33,0x81,0xF9};
+/*The above are the last address bit (LSB) of each sensor. if you add a new sensor, be sure change
+address to the new sensor's last address byte*/
+
 
 using namespace particleftpclient;// dont forget this, there is a func of
 // the dirctectory and its messing the naming convention
@@ -111,7 +116,7 @@ void setup() {
   pinMode(relay, OUTPUT);
   Serial.begin(9600);
   delay(100);
-
+  sensors.begin(); // begin communication for temperature sensor
   //the below if statements set the flag
   if(voltageCheck(battVolt)){
       flags[0] = 1;    //
@@ -143,6 +148,7 @@ void setup() {
     flags[4] = 0;Serial.println("CPcurr unavailable");
   }delay(100);
  tempcheck();
+
   if(voltageFunc(irr)) {
     flags[8] = 1;
   } else {
@@ -246,20 +252,32 @@ float voltageFunc( int pin) {
 
 //temperature function
 void tempFunc() {
-  /*This sensor uses the onewire library*/
-  for( i =0;i < 3;i++) {
-  if(sensor.read()) // this read the data from all the sensors in one go
+  sensors.requestTemperatures();
+  for(int i = 0;i < 3; i++)
   {
-    temperature[i] = sensor.celsius();
-    Serial.printf("\n Temperature %.2f C ",temperature[i] ); //this is stored in the array
-     delay(20);
-  }else {
-    Serial.println("temperature failed");
-  }
-  Serial.println("loop ends");
- }
-  //return temperature;
+     if(bat[7] == c[i]) {
+       Serial.println("Battery Temperature:");
+       printAddress(bat);
+       tempBat = sensors.getTempC(bat);
+       Serial.print("Temp C: ");
+   Serial.println(tempBat);Serial.println("\n");
+   }
+   if(ucp[7]==c[i]) {
+     Serial.println("UCP Temperature:");
+     printAddress(ucp);
+     tempUcp = sensors.getTempC(ucp);
+     Serial.print("Temp C: ");
+   Serial.println(tempUcp);Serial.println("\n");
+   }
+   if(cp[7]==c[i]) {
+     Serial.println("CP Temperature:");
+     printAddress(cp);
+     tempCp = sensors.getTempC(cp);
+       Serial.print("tempCp C: ");
+   Serial.println(tempCp);Serial.println("\n");
+   }
 }
+
 
 // Sdcard writter
 void writeSDcard(float vBat,float vUcp,float vCp,float curUcp,float curCp,float tempBat,float tempUcp,float tempCp, float irradiation){
@@ -356,12 +374,15 @@ void WriteFtpServer(
           Serial.println("the file has been created successfully");
           ftp.data.write("\n");
           //write data here
-          if (flags[0] != 0) {
+          if (flags[0] != 0) { /*
+                                this will send data only if the flag is high (i.e the sensor is working) else, it
+                                won't send. The same applies for all the if statement in this function
+                                */
             snprintf(data2, sizeof(data2), "%.2f",vBat);      //convert the battery voltage into string to send
             if(ftp.data.write(data2)){Serial.println("data written");} //send the data to ftp server
-            ftp.data.write("\t");
+            ftp.data.write("\t");   //Battery voltage data will be sent every minute of the day
            }else { ftp.data.write("NC"); }
-          if(hrs >= 5 && hrs <=19) {
+          if(hrs >= 4 && hrs <=19) {    // The rest of the data will be sent only in between these hours
              if(flags[1]!=0 )  {
                snprintf(data2, sizeof(data2), "%.2f",vUcp);
                if(ftp.data.write(data2)){Serial.println("data written");}
@@ -401,8 +422,8 @@ void WriteFtpServer(
                 if(ftp.data.write(irradiation)){Serial.println("data written");}
             }else { ftp.data.write("NC"); }
           }
-          snprintf(data2, sizeof(data2), "%d : %d : %d",hrs, mins, sec);
-          ftp.data.write(data2);
+          snprintf(data2, sizeof(data2), "%d : %d : %d",hrs, mins, sec); //time will also be sent
+          ftp.data.write(data2);  //every min of the day
           Serial.println(data2);
           Serial.println("the data has been written successfully");
           delay(100);
@@ -430,7 +451,17 @@ void WriteFtpServer(
 
 
 }
+//function to print address of the temperature sensor
+void printAddress(DeviceAddress deviceAddress)
+{
+  for (uint8_t i = 0; i < 8; i++)
+  {
+    // zero pad the address if necessary
+    if (deviceAddress[i] < 16) Serial.print("0");
+    Serial.print(deviceAddress[i], HEX);
+  }
 
+}
 // checking functions
 
 int voltageCheck(int pin) {
@@ -452,19 +483,23 @@ int currentCheck(int pin) {
 //current check
 
 void tempcheck() {
-for( i = 0; i < 3; i ++)
-  {
-    if(!sensor.read()){
-      if(i = 0 && sensor.celsius()) {flags[6] = 1;}
-      if(i = 1 && sensor.celsius()) {flags[5] = 1;}
-      if(i = 2 && sensor.celsius()) {flags[4] = 1;}
 
-  }else {
-      if(i = 0) {flags[6] = 1;}
-      if(i = 1) {flags[5] = 1;}
-      if(i = 2) {flags[4] = 1;}
+    if(sensors.getDeviceCount() == 3){
+      flags[6] = 1;
+      flags[5] = 1;
+      flags[4] = 1;
+
+    }else {
+      flags[6] = 0;
+      flags[5] = 0;
+      flags[4] = 0;
     }
-  }
+    if (!sensors.getAddress(bat, 0)) Serial.println("Unable to find address for Device 0");
+    if (!sensors.getAddress(ucp, 1)) Serial.println("Unable to find address for Device 1");
+    if (!sensors.getAddress(cp, 2)) Serial.println("Unable to find address for Device 2");
+    sensors.setResolution(bat,TEMPERATURE_PRECISION);
+    sensors.setResolution(ucp,TEMPERATURE_PRECISION);
+    sensors.setResolution(cp,TEMPERATURE_PRECISION);
 }
 //temp check
 
