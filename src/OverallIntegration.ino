@@ -17,13 +17,15 @@
 SdFat sd;       // initialization of sd card. we will be using this object of sd
 //to call sd functions
 const uint8_t chipSelect = A2; //chipSelect for SD, this can be anything, i used the default one
-
+// Primary SPI with DMA
+// SCK => A3, MISO => A4, MOSI => A5, SS => A2 (default)
 File myFile;  //This is the file object for SD card.
 //The above three var declaration is for sd card function
+
 OneWire oneWire(Temp);   //this is object function of temperature sensor
 DallasTemperature sensors(&oneWire); //this is the object that uses the previous object
-DeviceAddress bat,ucp,cp; //variable to store address of the temperature sensor
-const int c[] = {0x33,0x81,0xF9};
+DeviceAddress batAddress,ucpAddress,cpAddress; //variable to store address of the temperature sensor
+const int address[] = {0x33,0x81,0xF9};
 /*The above are the last address bit (LSB) of each sensor. if you add a new sensor, be sure change
 address to the new sensor's last address byte*/
 
@@ -90,8 +92,8 @@ bool flags[]={0,0,0,0,0,0,0,0,0,0,0};
 float currentValue=0;
 float current = 0;
 //current function variable declarations
-float R1 = 56000.0;
-float R2 = 8200.0;
+float R1 = 56000.0; //resistance value of the voltage sensor
+float R2 = 8200.0; // resistance value of the voltage sensor
 float  vin = 0;
 float vout = 0;
 //voltage function variable declarations
@@ -118,42 +120,46 @@ void setup() {
   delay(100);
   sensors.begin(); // begin communication for temperature sensor
   //the below if statements set the flag
-  if(voltageCheck(battVolt)){
-      flags[0] = 1;    //
+  if(voltageCheck(battVolt)) {
+      flags[0] = 1;
       Serial.println("voltage bat available");
-
   } else {
-    flags[0] = 0;
-    Serial.println("voltage bat unavailable");
+      flags[0] = 0;
+      Serial.println("voltage bat unavailable");
 
   }delay(100);
+
   if(voltageCheck(UCPVolt)) {
-    flags[1] = 1;Serial.println("voltage ucp available");
+      flags[1] = 1; Serial.println("voltage ucp available");
   } else {
-    flags[1] = 0;Serial.println("voltage ucp unavailable");
+      flags[1] = 0;Serial.println("voltage ucp unavailable");
   }delay(100);
+
   if(voltageCheck(CPVolt)) {
     flags[2] = 1;Serial.println("voltage cp available");
   } else {
     flags[2] = 0;Serial.println("voltage cp unavailable");
   }delay(100);
+
   if(currentCheck(UCPcurr)) {
     flags[3] = 1;Serial.println(" UCPcurr available");
   } else {
     flags[3] = 0;Serial.println("UCPcurr unavailable");
   }delay(100);
+
   if(currentCheck(CPcurr)) {
     flags[4] = 1;Serial.println("CPcurr available");
   } else {
     flags[4] = 0;Serial.println("CPcurr unavailable");
   }delay(100);
- tempcheck();
+ tempcheck(); // this function checks the flag and sensor within itself
 
   if(voltageFunc(irr)) {
     flags[8] = 1;
   } else {
     flags[8] = 0;
   }delay(100);
+
   if(sdcheck()) {
     flags[9] = 1;Serial.println("sd card available");
   } else {
@@ -164,47 +170,74 @@ void setup() {
   utc = Time.now();//initialize time from server (will cost data)
   delay(1000);
 }
+
+//THIS FUNCTIONS GETS EXCUTED ALL THE TIME
 void loop() {
-  vBat = voltageFunc(battVolt); if(vBat !=0) {flags[0] = 1;}  //read the battery voltage and set the flag high if it is  not zero
+  vBat = voltageFunc(battVolt); //read the battery voltage and set the flag high if it is  not zero
+  if(vBat !=0) {
+    flags[0] = 1;
+    Serial.printf("\n voltage of bat: %.2f", vBat);
+  }else {Serial.println("voltage of bat unavailable"); flags[0]=0;}
   delay(10);
-  vUcp = voltageFunc(UCPVolt); if(vUcp != 0) {flags[1] = 1;} //read the uncleaned panel voltage and set the flag high if its not zero
+
+  vUcp = voltageFunc(UCPVolt);  //read the uncleaned panel voltage and set the flag high if its not zero
+  if(vUcp != 0) {
+    flags[1] = 1;
+    Serial.printf("\n voltage of UCP: %.2f", vUcp);
+  } else {Serial.println("voltage of ucp unavailable");}
   delay(10);
-  vCp = voltageFunc(CPVolt);  if(vCp != 0 ) {flags[2] = 1; }  //read the cleaned panel voltage and set the flag high if its not zero
+
+  vCp = voltageFunc(CPVolt); //read the cleaned panel voltage and set the flag high if its not zero
+  if(vCp != 0 ) {
+    flags[2] = 1;
+    Serial.printf("\n voltage of CP: %.2f", vCp);
+  } else {Serial.println("voltage of cp unavailable");}
   delay(10);
-  curUcp = currentFunc(UCPcurr); if(curUcp != 0 && curUcp <= 30) {flags[3] = 1;} //read the uncleaned panel current and set the flag high if not zero
+
+  curUcp = currentFunc(UCPcurr); //read the uncleaned panel current and set the flag high if not zero
+  if(currentCheck(A1)) {
+    flags[3] = 1;
+    Serial.printf("\n current of UCP: %.2f", curUcp);
+  } else {Serial.println("current of ucp unavailable");}
   delay(10);
-  curCp = currentFunc(CPcurr);  if(curCp != 0 && curUcp <= 30 ) {flags[4] = 1;} //read the cleaned panel current and set the flag high if not zero
+
+  curCp = currentFunc(CPcurr);   //read the cleaned panel current and set the flag high if not zero
+  if(currentCheck(A0)) {
+    flags[4] = 1;
+    Serial.printf("\n current of cp: %.2f ", curCp);
+  } else {Serial.println("current of cp unavailable");}
   delay(10);
-  tempFunc();             //this function takes the data from all the three temperature sensor using the onewire library
+  tempFunc(); //this function takes the data from all the three temperature sensor using the onewire library
 
   delay(10);
-  irradiation = voltageFunc(irr); if(irradiation!=0) {flags[8]=1;} //read the irradiation sensor voltage and set the flag high if non zero
-  irradiation*=3000;
+  irradiation = voltageFunc(irr); //read the irradiation sensor voltage and set the flag high if non zero
+  irradiation*=600;
+  if(irradiation!=0) {
+    flags[8]=1;
+    Serial.printf("\n irradiation level : %.2f",irradiation);
+  }else {Serial.println("irradiation level: unavailable..");}
   delay(10);
-  Serial.printf("\n %.2f \t %.2f \t%.2f \t%.2f \t%.2f \t%.2f \t%.2f \t%.2f \t%.2f \n", vBat, vUcp, vCp, curUcp, curCp, tempBat, tempUcp, tempCp, irradiation );
-  delay(10);
-  now = millis(); //getting the time since the program started
+  now = millis(); //getting the time since the program started. This will return a value in milliseconds
   if ((now - lastTime) >= 1000) {  //this is to prevent timer overflow.. it should, in theory... the timer will overflow every 59days
     lastTime = now;                 //this will make it into a loop and prevent overflow
     Times = utc+(now/1000);
-    Times+=19800;
+    Times+=19800; //utc+ist
     hrs = Times%(24 * 3600) / 3600; //calculate hrs from utc+ist
     mins = Times%(3600) / 60; //calculate mins from utc+ist
     sec = Times%60; //calculate sec from utc+ist
-    Serial.println(utc);
+    Serial.printf("ist time in sec : %lu", Times);
+    if(hrs >= 11 && hrs <= 14 ) {
+      digitalWrite(relay, LOW);  //Switch on the heat sink connected to the relay at these hours 11am to 2pm
+      Serial.println("Relay is connected to heat sink");
+    }else {
+      digitalWrite(relay, HIGH); //Switch off the relay at other time
+      Serial.println("Relay is connected to battery");
+    }
     if(sec >= 0 && sec <=5 ) { //send data to ftp server and write the data on sd card
       WriteFtpServer(vBat, vUcp, vCp, curUcp, curCp, tempBat, tempUcp, tempCp,irradiation);
       delay(10);
       writeSDcard(vBat, vUcp, vCp, curUcp, curCp, tempBat, tempUcp, tempCp, irradiation);
     }
-    if(hrs >= 11 && hrs <= 14 ) {
-      digitalWrite(relay, LOW);  //Switch on the heat sink connected to the relay at these hours 11am to 2pm
-
-    }else {
-      digitalWrite(relay, HIGH); //Switch off the relay at other time
-
-    }
-
     Serial.printlnf("actualTIme: %d : %d : %d",hrs,mins,sec );
   }
   //send data only if its after one minute
@@ -242,9 +275,6 @@ float voltageFunc( int pin) {
   vin += (vout / (R2/(R1+R2)) ); //remove the offset
 }
   vin/=100;   //taking the average of all the readings
-  Serial.print("\n Voltage:  ");
-  Serial.println(vin);
-
   return vin;
 }
 
@@ -253,28 +283,28 @@ void tempFunc() {
   sensors.requestTemperatures();    //request data from the sensors
   for(int i = 0;i < 3; i++)     //loop through the three different address to
   {                       //find the right one and assign it accordingly. for example
-     if(bat[7] == c[i]) { //this line checks battery temperature sensor's last address
+     if(batAddress[7] == address[i]) { //this line checks battery temperature sensor's last address
        Serial.println("Battery Temperature:"); //if it matches as per the data we gave
-       printAddress(bat);   //this address is then is for battery temperature
-       tempBat = sensors.getTempC(bat); //this address is passed and battery temperature is
-       Serial.print("Temp C: ");    //assigned to the tempBat variable
-   Serial.println(tempBat);Serial.println("\n");
+       printAddress(batAddress);   //this address is then is for battery temperature
+       tempBat = sensors.getTempC(batAddress); //this address is passed and battery temperature is
+       Serial.printf("\t Temp C: ");    //assigned to the tempBat variable
+       Serial.println(tempBat);Serial.println("\n");
+     }
+     if(ucpAddress[7]==address[i]) {//the same is repeated three times. (3 sensors )
+       Serial.println("UCP Temperature:");
+       printAddress(ucpAddress);
+       tempUcp = sensors.getTempC(ucpAddress);
+       Serial.printf("\t Temp C: ");
+       Serial.println(tempUcp);Serial.println("\n");
+     }
+     if(cpAddress[7]==address[i]) {
+       Serial.println("CP Temperature:");
+       printAddress(cpAddress);
+       tempCp = sensors.getTempC(cpAddress);
+       Serial.print("\t tempCp C: ");
+       Serial.println(tempCp);Serial.println("\n");
+     }
    }
-   if(ucp[7]==c[i]) {//the same is repeated three times. (3 sensors )
-     Serial.println("UCP Temperature:");
-     printAddress(ucp);
-     tempUcp = sensors.getTempC(ucp);
-     Serial.print("Temp C: ");
-   Serial.println(tempUcp);Serial.println("\n");
-   }
-   if(cp[7]==c[i]) {
-     Serial.println("CP Temperature:");
-     printAddress(cp);
-     tempCp = sensors.getTempC(cp);
-       Serial.print("tempCp C: ");
-   Serial.println(tempCp);Serial.println("\n");
-   }
-}
 }
 
 // Sdcard writter
@@ -313,7 +343,7 @@ void writeSDcard(float vBat,float vUcp,float vCp,float curUcp,float curCp,float 
   myFile.printf("\t irradiation value : %.2f", irradiation);
   myFile.printf("\t time: %d : %d : %d \n", hrs,mins,sec);
   myFile.close();
-  Serial.println("i am done!! ;)");
+  Serial.println("i am done with sdcard. data loaded!! ;^)");
 }
 
 
@@ -332,9 +362,9 @@ void WriteFtpServer(
   snprintf(name, sizeof(name), "%lu.csv",Times);   //this line does the datatype conversion, any data to character
   /*name variable holds the name of the file, in ftp server, it is data consuming to open the file, edit it. so, it is easier to
   create a new file everytime with a unique name(i have used utc time )*/
-  Serial.println();
-  Serial.println(name);
-  Serial.println("Hello world, i am working !");
+  Serial.println("name of the file :");
+  Serial.print(name);
+  Serial.println("Hello hoomans, i am working on ftp ! be patient v.v");
   if(ftp.open(hostname, port, timeout)){   //opens the port and send the creditentials
     Serial.println("the server is open now");
     flags[10] =0; //seting flags B^)
@@ -372,54 +402,64 @@ void WriteFtpServer(
           Serial.println("the file has been created successfully");
           ftp.data.write("\n");
           //write data here
-          if (flags[0] != 0) { /*
-                                this will send data only if the flag is high (i.e the sensor is working) else, it
-                                won't send. The same applies for all the if statement in this function
-                                */
-            snprintf(data2, sizeof(data2), "%.2f",vBat);      //convert the battery voltage into string to send
-            if(ftp.data.write(data2)){Serial.println("data written");} //send the data to ftp server
-            ftp.data.write("\t");   //Battery voltage data will be sent every minute of the day
-           }else { ftp.data.write("NC"); }
+          if (flags[0] != 0) {
+            /*
+              this will send data only if the flag is high (i.e the sensor is working) else, it
+              won't send. The same applies for all the if statement in this function
+            */
+              snprintf(data2, sizeof(data2), "%.2f",vBat);      //convert the battery voltage into string to send
+              if(ftp.data.write(data2)){Serial.println("data written");} //send the data to ftp server
+              ftp.data.write("\t");   //Battery voltage data will be sent every minute of the day
+            }else { ftp.data.write("NC"); }
+
           if(hrs >= 4 && hrs <=19) {    // The rest of the data will be sent only in between these hours
-             if(flags[1]!=0 )  {
+              if(flags[1]!=0 )  {
                snprintf(data2, sizeof(data2), "%.2f",vUcp);
                if(ftp.data.write(data2)){Serial.println("data written");}
                ftp.data.write("\t");
-             }else { ftp.data.write("NC"); }
-             if(flags[2]!=0 )  {
+              }else { ftp.data.write("NC"); }
+
+              if(flags[2]!=0 )  {
                 snprintf(data2, sizeof(data2), "%.2f",vCp);
                 if(ftp.data.write(data2)){Serial.println("data written");}
                 ftp.data.write("\t");
               }else { ftp.data.write("NC"); }
-             if(flags[3]!=0 )  {
+
+              if(flags[3]!=0 )  {
                 snprintf(data2, sizeof(data2), "%.2f",curUcp);
                 if(ftp.data.write(data2)){Serial.println("data written");}
                 ftp.data.write("\t");
               }else { ftp.data.write("NC"); }
-             if(flags[4]!=0 )  {
+
+              if(flags[4]!=0 )  {
                 snprintf(data2, sizeof(data2), "%.2f",curCp);
                 if(ftp.data.write(data2)){Serial.println("data written");}
                 ftp.data.write("\t");
               }else { ftp.data.write("NC"); }
-             if(flags[5]!=0 )  {
+
+              if(flags[5]!=0 )  {
                 snprintf(data2, sizeof(data2), "%.2f",tempUcp);
                 if(ftp.data.write(data2)){Serial.println("data written");}
                 ftp.data.write("\t");
               }else { ftp.data.write("NC"); }
-            if(flags[6]!=0 )  {
+
+              if(flags[6]!=0 )  {
                 snprintf(data2, sizeof(data2), "%.2f",tempCp);
                 if(ftp.data.write(data2)){Serial.println("data written");}
                 ftp.data.write("\t");
               }else { ftp.data.write("NC"); }
-            if(flags[7]!=0 )  {
+
+              if(flags[7]!=0 )  {
                 snprintf(data2, sizeof(data2), "%.2f",tempBat);
                 if(ftp.data.write(data2)){Serial.println("data written");}
-            }else { ftp.data.write("NC"); }
-            if(flags[8]!=0 )   {
+              }else { ftp.data.write("NC"); }
+
+              if(flags[8]!=0 )   {
                 snprintf(data2, sizeof(data2), "%.2f",irradiation);
                 if(ftp.data.write(irradiation)){Serial.println("data written");}
-            }else { ftp.data.write("NC"); }
+              }else { ftp.data.write("NC"); }
           }
+
           snprintf(data2, sizeof(data2), "%d : %d : %d",hrs, mins, sec); //time will also be sent
           ftp.data.write(data2);  //every min of the day
           Serial.println(data2);
@@ -495,12 +535,18 @@ void tempcheck() {
 
     //below we assign the address. it's out of if block because, if the count is not equal
     //to 3 it wont assign the address of even the working sensor.
-    if (!sensors.getAddress(bat, 0)) Serial.println("Unable to find address for Device 0");
-    if (!sensors.getAddress(ucp, 1)) Serial.println("Unable to find address for Device 1");
-    if (!sensors.getAddress(cp, 2)) Serial.println("Unable to find address for Device 2");
-    sensors.setResolution(bat,9); //we set the precision
-    sensors.setResolution(ucp,9);// 9bit or 11 bit or 12 bit
-    sensors.setResolution(cp,9);
+    if (!sensors.getAddress(batAddress, 0)) {
+      Serial.println("Unable to find address for batt temp");
+    } else {printAddress(batAddress);}
+    if (!sensors.getAddress(ucpAddress, 1)) {
+      Serial.println("Unable to find address for ucp temp ");
+    } else {printAddress(ucpAddress);}
+    if (!sensors.getAddress(cpAddress, 2)) {
+      Serial.println("Unable to find address for cp temp ");
+    }else {printAddress(cpAddress);}
+    sensors.setResolution(batAddress,9); //we set the precision
+    sensors.setResolution(ucpAddress,9);// 9bit or 11 bit or 12 bit
+    sensors.setResolution(cpAddress,9);
 }
 //temp check
 
