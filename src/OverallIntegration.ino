@@ -4,7 +4,7 @@
 #include <OneWire.h>          //library for temperature sensor
 #include <spark-dallas-temperature.h>
 /*debug line*/
-#define DEBUG 1
+//#define DEBUG 1
 /*debug line*/
 #define battVolt B2 //battery voltage input analog pin
 #define UCPVolt B3 //uncleaned panel voltage input analog pin
@@ -335,7 +335,10 @@ void loop() {
     #endif
   }
   //send data only if its after one minute
-
+  #ifdef DEBUG
+    Serial.print("flags: ");
+    for(i = 0; i <=10; i++) {Serial.print(flags[i]);}
+  #endif
 }
 
 //functions
