@@ -35,11 +35,11 @@ address to the new sensor's last address byte*/
 using namespace particleftpclient;// dont forget this, there is a func of
 // the dirctectory and its messing the naming convention
 ParticleFtpClient ftp = ParticleFtpClient();  //ftp is the object for FTP client
-String hostname = "13.232.193.36"; //condifential
-String userName = "eira-ftp"; //condifential
+String hostname = "Ip"; //condifential
+String userName = "name"; //condifential
 int port = 21; //condifential
 int timeout = 5;
-String password = "Ftp@2.0$$#"; //condifential
+String password = "password"; //condifential
 char name[20];
 char data2[20];
 // kept the condifential files open, the ftp lib is not accepting class or array
@@ -93,6 +93,9 @@ bool flags[]={0,0,0,0,0,0,0,0,0,0,0};
 // function variable declarations
 float currentValue=0;
 float current = 0;
+float UCPcurrentRef = 0;
+float CPcurrentRef = 0;
+float  currentRef = 0;
 //current function variable declarations
 float R1 = 56000.0; //resistance value of the voltage sensor
 float R2 = 8200.0; // resistance value of the voltage sensor
@@ -344,23 +347,22 @@ void loop() {
 //functions
 //current function
 float currentFunc( int pin) {
-
+  if(pin == UCPcurr) {currentRef = UCPcurrentRef;}
+  if(pin == CPcurr) {currentRef = CPcurrentRef;}
   for( i =0; i < 3000 ; i++)
   {
   currentValue+= (3.3/4095)*analogRead(pin); //currentPin4uncleanedpanel
   //the current is added we read the value for 30000 times continously
   }
-
-
   currentValue=currentValue/3000; //taking average, this will reduce the offset errors
   #ifdef DEBUG
     Serial.println("current raw Value");
     Serial.println(currentValue);
   #endif
-  if(currentValue >= 2.42 && currentValue <=2.44) {  //the value 2.42 & 2.44 is based the power source given to power the current sensor
-    currentValue = 2.43;
+  if(currentValue >= currentRef-2 && currentValue <= currentRef+2) {  //the value of the current ref,
+    currentValue = currentRef;  //is based the power source given to power the current sensor when there is no current flowing throw it
   }
-  current = ((currentValue - 2.43 )/0.066); //divide the error by sensitivty we get the acutal current
+  current = ((currentValue - currentRef )/0.066); //divide the error by sensitivty we get the acutal current
   return current;
 }
 
@@ -654,9 +656,20 @@ int voltageCheck(int pin) { //this functions will return 1 if the voltage sensor
 int currentCheck(int pin) { //this function will return 1 if there is current, else it will return 0
   float err = (3.3/4095)*analogRead(pin);
     if( err ) {
-      return 0;
-    }else {
+      for (i = 0; i< 1000; i++ ) {
+        if(pin == UCPcurr){ UCPcurrentRef+= (3.3/4095)*analogRead(pin);}
+        if(pin == CPcurr){CPcurrentRef+=(3.3/4095)*analogRead(pin);}
+        }
+        UCPcurrentRef/=1000;
+        CPcurrentRef/=1000;
+        #ifdef DEBUG
+          Serial.printf("current reference of ucp: %.2f",UCPcurrentRef);
+          Serial.printf("current reference of cp: %.2f",CPcurrentRef);
+        #endif
       return 1;
+    }else {
+      currentRef =0;
+      return 0;
     }
 }
 //current check
