@@ -186,6 +186,7 @@ void setup() {
   }delay(100);
  tempcheck(); // this function checks the flag and sensor within itself
 
+ flags[9] = 0;
   if(voltageFunc(irr)) {
     flags[8] = 1;
     #ifdef DEBUG
@@ -204,7 +205,6 @@ void setup() {
       Serial.println("sd card available");
     #endif
   } else {
-    flags[9] = 0;
     #ifdef DEBUG
       Serial.println("sdcard unavailable");
     #endif
@@ -721,5 +721,3 @@ int sdcheck() { //this will check whether the SD card is there are not.
   }
 }
 //SD card check
-
-// irradiation check
